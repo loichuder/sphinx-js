@@ -1,6 +1,7 @@
 from .directives import (auto_class_directive_bound_to_app,
                          auto_function_directive_bound_to_app,
-                         auto_attribute_directive_bound_to_app)
+                         auto_attribute_directive_bound_to_app,
+                         auto_module_directive_bound_to_app)
 from .doclets import gather_doclets
 
 
@@ -21,6 +22,9 @@ def setup(app):
     app.add_directive_to_domain('js',
                                 'autoattribute',
                                 auto_attribute_directive_bound_to_app(app))
+    app.add_directive_to_domain('js',
+                                'automodule',
+                                auto_module_directive_bound_to_app(app))
     # TODO: We could add a js:module with app.add_directive_to_domain().
 
     app.add_config_value('js_language', 'javascript', 'env')
