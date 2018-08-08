@@ -325,6 +325,91 @@ class AutoAttributeRenderer(JsRenderer):
             content='\n'.join(self._content))
 
 
+class AutoModuleRenderer(JsRenderer):
+    _template = 'module.rst'
+
+    def _template_vars(self, name, full_path, doclet):
+        return dict(
+            name=name,
+            fields=self._fields(doclet),
+            deprecated=doclet.get('deprecated', False),
+            see_also=doclet.get('see', []),
+            content='\n'.join(self._content),
+            members=self._members_of(full_path,
+                                     include=self._options['members'],
+                                     exclude=self._options.get('exclude-members', set()),
+                                     should_include_private='private-members' in self._options)
+                    if 'members' in self._options else '')
+
+    def _members_of(self, full_path, include, exclude, should_include_private):
+        """Return RST describing the members of the named module.
+
+        :arg full_path list: The unambiguous path of the class we're documenting
+        :arg include: List of names of members to include. If empty, include
+            all.
+        :arg exclude: Set of names of members to exclude
+        :arg should_include_private: Whether to include private members
+
+        """
+        def rst_for(doclet):
+            doclet_kind = doclet.get('kind')
+
+            if doclet_kind in ['class']:
+                renderer = AutoClassRenderer
+            elif doclet_kind in ['function', 'typedef']:
+                renderer = AutoFunctionRenderer
+            else:
+                renderer = AutoAttributeRenderer
+            # Pass a dummy arg list with no formal param list so
+            # _formal_params() won't find an explicit param list in there and
+            # override what it finds in the code:
+            return renderer(self._directive, self._app, arguments=['dummy']).rst(
+                [doclet['name']],
+                'dummy_full_path',
+                doclet,
+                use_short_name=False)
+
+        def doclets_to_include(include):
+            """Return the doclets that should be included (before excludes and
+            access specifiers are taken into account).
+
+            This will either be the doclets explicitly listed after the
+            ``:members:`` option, in that order; all doclets that are
+            members of the class; or listed members with remaining ones
+            inserted at the placeholder "*".
+
+            """
+            doclets = self._app._sphinxjs_doclets_by_path[tuple(full_path)]
+            if not include:
+                # Specifying none means listing all.
+                return sorted(doclets, key=lambda d: d['name'])
+            included_set = set(include)
+
+            # If the special name * is included in the list, include
+            # all other doclets, in sorted order.
+            if '*' in included_set:
+                star_index = include.index('*')
+                not_included = sorted(d['name'] for d in doclets if d['name'] not in included_set)
+                include = include[:star_index] + not_included + include[star_index + 1:]
+                included_set.update(not_included)
+
+            # Even if there are 2 doclets with the same short name (e.g. a
+            # static member and an instance one), keep them both. This
+            # prefiltering step should make the below sort less horrible, even
+            # though I'm calling index().
+            included_doclets = [d for d in doclets if d['name'] in included_set]
+            # sort()'s stability should keep same-named doclets in the order
+            # JSDoc spits them out in.
+            included_doclets.sort(key=lambda d: include.index(d['name']))
+            return included_doclets
+
+        return '\n\n'.join(
+            rst_for(doclet) for doclet in doclets_to_include(include)
+            if (doclet.get('access', 'public') in ('public', 'protected')
+                or (doclet.get('access') == 'private' and should_include_private))
+            and doclet['name'] not in exclude)
+
+
 def _returns_formatter(field, description):
     """Derive heads and tail from ``@returns`` blocks."""
     types = _or_types(field)
