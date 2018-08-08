@@ -65,6 +65,12 @@ def gather_doclets(app):
             segments = doclet_full_path(d, root_for_relative_paths, longname_field='memberof')
             app._sphinxjs_doclets_by_class[tuple(segments)].append(d)
 
+    app._sphinxjs_doclets_by_module = defaultdict(lambda: [])
+    # Gather doclets by filepath
+    for d in doclets:
+        full_path = os.path.join(d.get('meta')['path'], d.get('meta')['filename'])
+        app._sphinxjs_doclets_by_module[full_path].append(d)
+
 
 def program_name_on_this_platform(program):
     """Return the name of the executable file on the current platform, given a
